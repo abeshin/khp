@@ -1,0 +1,90 @@
+
+20140313 literateの初期バージョンの作成
+
+
+<<md5記録読み込み>>
+<<menuの更新チェック>>
+<<ファイル走査>>
+<<md5記録書き込み>>
+
+
+
+# -*- coding: utf-8 -*-
+
+DIC = 'dic.txt'
+TXT2TAGS = '/usr/local/bin/txt2tags'
+
+保存していあるファイルのmd5を読み込む。
+
+import yaml
+dic = {}
+try:
+    with open(DIC) as f:
+        dic = yaml.load(f.read())
+except:
+    with open(DIC, 'w') as f:
+        f.write(dic)
+
+
+html生成時にmenu.t2tを読み込んでいるので、
+メニューが編集された場合にはすべてのt2tファイルをコンパイル
+し直さなければいけない。
+変換作業はos.walk時に行うとして、
+menu.t2tが変更されたかどうかでFLAGを立てておく。
+
+ファイルが存在しない場合新規に作成するようにしているため、
+try,exceptの記述で長くなってしまって、
+本当は1つの関数でdic.txtとmenu.t2tからデータを読み取りたかったのだが、
+yamlを経由するかどうかの違いがあるので、断念。
+
+\begin{code}
+import hashlib
+try:
+    with open('menu.t2t') as f:
+        m = f.read()
+except:
+    with open('menu.t2t', 'w') as f:
+        f.write(dic)
+
+COMPILE_ALL = False
+m_hash =  hashlib.sha224(m).hexdigest() 
+if m_hash != dic['./menu.t2t']:
+    COMPILE_ALL = True
+\end{code}
+
+
+実際にディレクトリをたどる。
+
+os.walkを返り値がpath, directory, [ファイル名]
+となっているため、pathとfilenameのみを結合さればいい、
+なぜこのような仕様になっているのかが不明。。
+
+dic.has_keyのほうがスマートに書けそうだが、
+それは今後の課題とする
+
+\begin{code}
+import os
+from subprocess import check_call
+for p,d,f in os.walk("."):
+    for i in f:
+        f1 = os.path.join(p,i)
+        f1_hash = hashlib.sha224(open(f1).read()).hexdigest()
+
+        if f1.endswith('.t2t'):
+            try:
+                if dic[f1] != f1_hash or COMPILE_ALL:
+                     check_call([TXT2TAGS, '-t', 'html', '--toc', f1])
+                     dic[f1] = f1_hash
+            except:
+                check_call([TXT2TAGS, '-t', 'html', '--toc', f1])
+                dic[f1] = f1_hash
+
+
+ファイルのmd5をファイルに記録する
+\begin{code}
+with open(DIC, 'w') as f:
+    f.write(yaml.dump(dic))
+\end{code}
+
+
+
